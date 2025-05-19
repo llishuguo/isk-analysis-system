@@ -367,15 +367,27 @@
           });
           matrixRows.push(notApplicableRow);
           
-          // 4. 使用PapaParse将矩阵转换为CSV
-          const csvContent = Papa.unparse(matrixRows, { 
-            encoding: 'gb18030',
-            delimiter: ',',
-            header: false // 已经手动生成了标题行
+          // 4. 生成CSV内容 - 手动构建CSV以确保编码正确
+          let csvContent = "\uFEFF"; // 添加BOM标记以帮助Excel识别UTF-8
+          
+          // 添加每一行，用逗号分隔
+          matrixRows.forEach(row => {
+            // 处理每个单元格，如果包含逗号、引号或换行符，则加引号
+            const processedRow = row.map(cell => {
+              if (cell === null || cell === undefined) {
+                return '';
+              }
+              const cellStr = String(cell);
+              if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                return `"${cellStr.replace(/"/g, '""')}"`;
+              }
+              return cellStr;
+            });
+            csvContent += processedRow.join(',') + '\r\n';
           });
           
-          // 5. 创建下载链接
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=gb18030;' });
+          // 5. 创建下载链接 - 使用UTF-8编码
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
@@ -384,7 +396,8 @@
           link.click();
           document.body.removeChild(link);
           
-          alert("矩阵导出成功！");
+          // 显示打开CSV文件的提示
+          alert("矩阵导出成功！\n\n如果打开CSV文件出现乱码，请：\n1. 在Excel中，使用"数据"→"自文本"导入\n2. 选择"UTF-8"编码\n3. 或者使用记事本先打开，然后另存为UTF-8编码");
         } catch (error) {
           console.error("导出矩阵错误:", error);
           alert("导出失败，请检查控制台错误信息");
@@ -404,8 +417,28 @@
             '标记来源': item.source
           }));
           
-          const csvContent = Papa.unparse(exportData, { encoding: 'gb18030' });
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=gb18030;' });
+          // 手动构建CSV内容以确保正确编码
+          let csvContent = "\uFEFF"; // 添加BOM标记以帮助Excel识别UTF-8
+          
+          // 添加标题行
+          const headers = ['序号', '微博ID', '用户名', '微博内容', '风险类别', '标记来源'];
+          csvContent += headers.join(',') + '\r\n';
+          
+          // 添加数据行
+          exportData.forEach(row => {
+            const values = headers.map(header => {
+              const cellValue = row[header] === undefined ? '' : String(row[header]);
+              // 如果包含逗号、引号或换行符，则包裹在引号中
+              if (cellValue.includes(',') || cellValue.includes('"') || cellValue.includes('\n')) {
+                return `"${cellValue.replace(/"/g, '""')}"`;
+              }
+              return cellValue;
+            });
+            csvContent += values.join(',') + '\r\n';
+          });
+          
+          // 创建下载链接 - 使用UTF-8编码
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
@@ -414,9 +447,81 @@
           link.click();
           document.body.removeChild(link);
           
-          alert("详细结果导出成功！");
+          // 显示打开CSV文件的提示
+          alert("详细结果导出成功！\n\n如果打开CSV文件出现乱码，请：\n1. 在Excel中，使用"数据"→"自文本"导入\n2. 选择"UTF-8"编码\n3. 或者使用记事本先打开，然后另存为UTF-8编码");
         } catch (error) {
           console.error("导出详细结果错误:", error);
+          alert("导出失败，请检查控制台错误信息");
+        }
+      };
+      
+      // 导出详细结果为HTML表格
+      const exportDetailedAsHTML = () => {
+        try {
+          // 创建HTML表格内容
+          let tableContent = `
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                table { border-collapse: collapse; width: 100%; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .long-text { max-width: 400px; word-break: break-word; }
+              </style>
+              <title>风险分析详细结果</title>
+            </head>
+            <body>
+              <h2>风险分析详细结果</h2>
+              <table>
+                <tr>
+                  <th>序号</th>
+                  <th>微博ID</th>
+                  <th>用户名</th>
+                  <th>微博内容</th>
+                  <th>风险类别</th>
+                  <th>标记来源</th>
+                </tr>
+          `;
+          
+          // 添加每行数据
+          data.forEach((item, index) => {
+            tableContent += `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${item.id}</td>
+                <td>${item.author || '未知用户'}</td>
+                <td class="long-text">${item.content}</td>
+                <td>${item.notApplicable ? '不适用' : item.riskCategories.join('<br>')}</td>
+                <td>${item.source || '-'}</td>
+              </tr>
+            `;
+          });
+          
+          // 完成HTML表格
+          tableContent += `
+              </table>
+              <p style="margin-top: 20px;">导出时间: ${new Date().toLocaleString()}</p>
+            </body>
+            </html>
+          `;
+          
+          // 创建Blob对象
+          const blob = new Blob([tableContent], { type: 'text/html;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          
+          // 创建下载链接
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = '风险分析详细结果.html';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          alert("HTML详细结果导出成功！用浏览器打开此文件查看，或将内容复制到Excel中。");
+        } catch (error) {
+          console.error("导出HTML表格错误:", error);
           alert("导出失败，请检查控制台错误信息");
         }
       };
@@ -690,6 +795,29 @@
                   <h2 className="text-xl font-bold mb-4">结果导出模块</h2>
                   
                   <div className="space-y-6">
+                    <div className="p-6 bg-blue-50 rounded-lg border border-blue-200">
+                      <h3 className="text-lg font-semibold mb-2 text-blue-800">⚠️ CSV编码说明</h3>
+                      <p className="mb-2">如果导出的CSV出现乱码，请按照以下方法打开：</p>
+                      <div className="ml-4 text-sm">
+                        <p className="font-bold mb-1">方法一：使用Excel导入（推荐）</p>
+                        <ol className="list-decimal list-inside ml-4 space-y-1">
+                          <li>在Excel中，选择"数据"→"自文本/文件"</li>
+                          <li>找到并选择导出的CSV文件</li>
+                          <li>在导入向导中，选择"分隔符号"，并指定"UTF-8"编码</li>
+                          <li>点击"下一步"，选择"逗号"作为分隔符</li>
+                          <li>点击"完成"导入数据</li>
+                        </ol>
+                        
+                        <p className="font-bold mt-3 mb-1">方法二：通过记事本转换</p>
+                        <ol className="list-decimal list-inside ml-4 space-y-1">
+                          <li>用记事本打开导出的CSV文件</li>
+                          <li>选择"文件"→"另存为"</li>
+                          <li>保持文件名不变，但在"编码"下拉框中选择"ANSI"或"GB2312"</li>
+                          <li>保存后直接双击打开文件</li>
+                        </ol>
+                      </div>
+                    </div>
+
                     <div className="p-6 bg-gray-50 rounded-lg">
                       <h3 className="text-lg font-semibold mb-4">矩阵导出格式</h3>
                       <p className="mb-4">将导出风险指标矩阵，格式如下:</p>
@@ -699,12 +827,20 @@
                         <li>单元格: 1表示标记了该风险，0表示未标记</li>
                         <li>不适用内容: 标记为"N/A"</li>
                       </ul>
-                      <button 
-                        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded"
-                        onClick={exportMatrixCSV}
-                      >
-                        导出矩阵格式 (CSV)
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button 
+                          className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded"
+                          onClick={exportMatrixCSV}
+                        >
+                          导出矩阵格式 (CSV)
+                        </button>
+                        <button 
+                          className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded"
+                          onClick={exportMatrixAsExcelTable}
+                        >
+                          导出为HTML表格 (无乱码)
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="p-6 bg-gray-50 rounded-lg">
@@ -715,12 +851,20 @@
                         <li>包含序号、微博ID、用户名、内容和风险标记</li>
                         <li>多个风险标记用"|"分隔</li>
                       </ul>
-                      <button 
-                        className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded"
-                        onClick={exportDetailedCSV}
-                      >
-                        导出详细结果 (CSV)
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button 
+                          className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded"
+                          onClick={exportDetailedCSV}
+                        >
+                          导出详细结果 (CSV)
+                        </button>
+                        <button 
+                          className="bg-purple-600 hover:bg-purple-700 text-white py-2 px-6 rounded"
+                          onClick={exportDetailedAsHTML}
+                        >
+                          导出详细结果 (HTML无乱码)
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="p-6 bg-gray-50 rounded-lg">
