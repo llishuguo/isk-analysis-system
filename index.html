@@ -231,15 +231,25 @@
 
       // 初始化
       React.useEffect(() => {
-        const options = flattenRiskIndicators(riskIndicators);
-        setRiskOptions(options);
-        
-        // 在实际应用中移除这行，这里仅用于演示
-        setData(generateSampleData());
+        try {
+          const options = flattenRiskIndicators(riskIndicators);
+          setRiskOptions(options);
+          
+          // 在实际应用中移除这行，这里仅用于演示
+          setData(generateSampleData());
+        } catch (error) {
+          console.error("初始化错误:", error);
+          // 确保即使出错也设置一些默认值
+          setRiskOptions([]);
+          setData([]);
+        }
       }, []);
 
       // 当数据更新时计算统计信息
       React.useEffect(() => {
+        // 初始化一个空的统计数据数组，确保统计数据始终存在
+        let statsData = [];
+        
         if (data.length > 0) {
           // 计算各风险类别的出现次数
           const categoryCounts = {};
@@ -262,7 +272,7 @@
             }
           });
           
-          const statsData = Object.entries(categoryCounts).map(([name, value]) => ({
+          statsData = Object.entries(categoryCounts).map(([name, value]) => ({
             name,
             value
           }));
@@ -274,9 +284,10 @@
           if (notApplicableCount > 0) {
             statsData.push({ name: '不适用', value: notApplicableCount });
           }
-          
-          setStats(statsData);
         }
+        
+        // 即使没有数据，也确保设置统计数据
+        setStats(statsData);
       }, [data]);
 
       // 导入CSV文件
@@ -661,56 +672,62 @@
                   {/* 统计视图 */}
                   <div className="mb-8">
                     <h3 className="font-bold mb-4">风险分布统计:</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="text-center mb-4">风险类别占比</h4>
-                        <div className="h-64">
-                          <Recharts.ResponsiveContainer width="100%" height="100%">
-                            <Recharts.PieChart>
-                              <Recharts.Pie
+                    {stats.length === 0 ? (
+                      <div className="text-center p-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500">暂无统计数据，请先标记一些内容</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="text-center mb-4">风险类别占比</h4>
+                          <div className="h-64">
+                            <Recharts.ResponsiveContainer width="100%" height="100%">
+                              <Recharts.PieChart>
+                                <Recharts.Pie
+                                  data={stats}
+                                  cx="50%"
+                                  cy="50%"
+                                  labelLine={true}
+                                  label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                  outerRadius={80}
+                                  fill="#8884d8"
+                                  dataKey="value"
+                                >
+                                  {stats.map((entry, index) => (
+                                    <Recharts.Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                  ))}
+                                </Recharts.Pie>
+                                <Recharts.Tooltip />
+                                <Recharts.Legend />
+                              </Recharts.PieChart>
+                            </Recharts.ResponsiveContainer>
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="text-center mb-4">风险类别数量</h4>
+                          <div className="h-64">
+                            <Recharts.ResponsiveContainer width="100%" height="100%">
+                              <Recharts.BarChart
                                 data={stats}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={true}
-                                label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                dataKey="value"
+                                margin={{
+                                  top: 5,
+                                  right: 30,
+                                  left: 20,
+                                  bottom: 5,
+                                }}
                               >
-                                {stats.map((entry, index) => (
-                                  <Recharts.Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Recharts.Pie>
-                              <Recharts.Tooltip />
-                              <Recharts.Legend />
-                            </Recharts.PieChart>
-                          </Recharts.ResponsiveContainer>
+                                <Recharts.CartesianGrid strokeDasharray="3 3" />
+                                <Recharts.XAxis dataKey="name" />
+                                <Recharts.YAxis />
+                                <Recharts.Tooltip />
+                                <Recharts.Legend />
+                                <Recharts.Bar dataKey="value" fill="#8884d8" />
+                              </Recharts.BarChart>
+                            </Recharts.ResponsiveContainer>
+                          </div>
                         </div>
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="text-center mb-4">风险类别数量</h4>
-                        <div className="h-64">
-                          <Recharts.ResponsiveContainer width="100%" height="100%">
-                            <Recharts.BarChart
-                              data={stats}
-                              margin={{
-                                top: 5,
-                                right: 30,
-                                left: 20,
-                                bottom: 5,
-                              }}
-                            >
-                              <Recharts.CartesianGrid strokeDasharray="3 3" />
-                              <Recharts.XAxis dataKey="name" />
-                              <Recharts.YAxis />
-                              <Recharts.Tooltip />
-                              <Recharts.Legend />
-                              <Recharts.Bar dataKey="value" fill="#8884d8" />
-                            </Recharts.BarChart>
-                          </Recharts.ResponsiveContainer>
-                        </div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                   
                   {/* 表格视图 */}
@@ -725,6 +742,7 @@
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
+                    {/* 表格视图 */}
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -736,28 +754,36 @@
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredData.map((item, index) => (
-                            <tr key={index} className={!item.riskCategories.length && !item.notApplicable ? 'bg-yellow-50' : (item.notApplicable ? 'bg-gray-100' : '')}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.id}</td>
-                              <td className="px-6 py-4 text-sm text-gray-900">{item.content}</td>
-                              <td className="px-6 py-4 text-sm">
-                                {item.notApplicable ? (
-                                  <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded">不适用</span>
-                                ) : item.riskCategories.length > 0 ? (
-                                  <div className="flex flex-wrap">
-                                    {item.riskCategories.map((risk, i) => (
-                                      <span key={i} className="bg-blue-100 text-blue-800 mr-1 mb-1 px-2 py-0.5 rounded text-xs">
-                                        {risk}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span className="text-yellow-600">未分类</span>
-                                )}
+                          {filteredData.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                                暂无数据
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-500">{item.source || '-'}</td>
                             </tr>
-                          ))}
+                          ) : (
+                            filteredData.map((item, index) => (
+                              <tr key={index} className={!item.riskCategories.length && !item.notApplicable ? 'bg-yellow-50' : (item.notApplicable ? 'bg-gray-100' : '')}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.id}</td>
+                                <td className="px-6 py-4 text-sm text-gray-900">{item.content}</td>
+                                <td className="px-6 py-4 text-sm">
+                                  {item.notApplicable ? (
+                                    <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded">不适用</span>
+                                  ) : item.riskCategories && item.riskCategories.length > 0 ? (
+                                    <div className="flex flex-wrap">
+                                      {item.riskCategories.map((risk, i) => (
+                                        <span key={i} className="bg-blue-100 text-blue-800 mr-1 mb-1 px-2 py-0.5 rounded text-xs">
+                                          {risk}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-yellow-600">未分类</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">{item.source || '-'}</td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -774,19 +800,23 @@
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {data.filter(item => !item.riskCategories.length && !item.notApplicable).map((item, index) => (
-                              <tr key={index}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.id}</td>
-                                <td className="px-6 py-4 text-sm text-gray-900">{item.content}</td>
+                            {data.filter(item => !item.riskCategories.length && !item.notApplicable).length === 0 ? (
+                              <tr>
+                                <td colSpan="2" className="px-6 py-4 text-center text-gray-500">
+                                  {data.length === 0 ? '暂无数据' : '没有未分类内容'}
+                                </td>
                               </tr>
-                            ))}
+                            ) : (
+                              data.filter(item => !item.riskCategories.length && !item.notApplicable).map((item, index) => (
+                                <tr key={index}>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.id}</td>
+                                  <td className="px-6 py-4 text-sm text-gray-900">{item.content}</td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
-                      
-                      {data.filter(item => !item.riskCategories.length && !item.notApplicable).length === 0 && (
-                        <p className="py-4 text-green-600">没有未分类内容</p>
-                      )}
                     </div>
                     
                     <div className="mt-6">
